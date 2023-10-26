@@ -6,7 +6,11 @@ def main():
     print("Logs from your program will appear here!")
 
     server_socket = socket.create_server(("localhost", 4221), reuse_port=True)
-    server_socket.accept() # wait for client
+    conn, addr = server_socket.accept() # wait for client
+    data = conn.recv(1024)
+
+    response = "HTTP/1.1 200 OK\r\n\r\n".encode()
+    conn.send(response)
 
 
 if __name__ == "__main__":
