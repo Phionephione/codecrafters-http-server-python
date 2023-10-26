@@ -7,9 +7,14 @@ def main():
 
     server_socket = socket.create_server(("localhost", 4221), reuse_port=True)
     conn, addr = server_socket.accept() # wait for client
-    data = conn.recv(1024)
+    request = conn.recv(4096)
+    request = request.decode().split("\r\n")
+    http_method, path, http_version = request[0].split(" ")
 
-    response = "HTTP/1.1 200 OK\r\n\r\n".encode()
+    if path == "/":
+        response = "HTTP/1.1 200 OK\r\n\r\n".encode()
+    else:
+        response = "HTTP/1.1 404 Not Found\r\n\r\n".encode()
     conn.send(response)
 
 
