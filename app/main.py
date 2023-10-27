@@ -1,17 +1,12 @@
 import socket
+import threading
 
 
 HTTP_STATUS_OK = "HTTP/1.1 200 OK\r\n"
 HTTP_STATUS_NOT_FOUND = "HTTP/1.1 404 Not Found\r\n"
 
-def main():
-    # You can use print statements as follows for debugging,
-    # they'll be visible when running tests.
-    print("Logs from your program will appear here!")
 
-    server_socket = socket.create_server(("localhost", 4221), reuse_port=True)
-    conn, addr = server_socket.accept() # wait for client
-
+def handle_client(conn, addr):
     request = conn.recv(4096)
     request = request.decode().splitlines()
 
@@ -37,6 +32,18 @@ def main():
         response = HTTP_STATUS_NOT_FOUND + "\r\n"
 
     conn.send(response.encode())
+    conn.close()
+
+
+def main():
+    server_socket = socket.create_server(("localhost", 4221), reuse_port=True)
+
+    while True:
+        conn, addr = server_socket.accept() # wait for client
+
+        thread = threading.Thread(target=handle_client, args=(conn, addr))
+
+        thread.start()
 
 
 
