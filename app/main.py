@@ -18,7 +18,7 @@ def main():
     _, path, _ = request[0].split(" ")
 
     if path == "/":
-        response = HTTP_STATUS_OK
+        response = HTTP_STATUS_OK + "\r\n"
     elif path.startswith('/echo'):
         content = path.split("/echo/")[1]
         response = (HTTP_STATUS_OK +
@@ -34,7 +34,7 @@ def main():
                     "\r\n"
                     f"{content}\r\n")
     else:
-        response = HTTP_STATUS_NOT_FOUND
+        response = HTTP_STATUS_NOT_FOUND + "\r\n"
 
     conn.send(response.encode())
 
