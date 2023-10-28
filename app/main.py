@@ -2,68 +2,146 @@ import sys
 import socket
 import threading
 
-
+# Config
 HOST = "localhost"
 PORT = 4221
 FILES_DIR = ""
 
+# HTTP Statuses
 HTTP_STATUS_OK = "HTTP/1.1 200 OK\r\n"
 HTTP_STATUS_NOT_FOUND = "HTTP/1.1 404 Not Found\r\n"
+HTTP_STATUS_CREATED = "HTTP/1.1 201 Created\r\n"
 
 
-def get_response(request, files=None):
-    _, path, _ = request[0].split(" ")
+def response(status, headers, body):
+    """
+    Returns a properly formatted HTTP response.
 
-    if path == "/":
-        response = HTTP_STATUS_OK + "\r\n"
-    elif path.startswith('/echo'):
+    Args:
+        status (str): The HTTP status code and message.
+        headers (dict): A dictionary of HTTP headers.
+        body (str): The response body.
+
+    Returns:
+        bytes: The encoded HTTP response.
+    """
+    return (status +
+            "".join(f"{k}: {v}\r\n" for k, v in headers.items()) +
+            "\r\n" +
+            body + "\r\n").encode()
+
+
+def handle_request(request, files=None):
+    """
+    Handle incoming HTTP requests and generate appropriate HTTP responses.
+
+    Args:
+        request (list): A list containing the HTTP request data.
+        files (str, optional): The path to the directory containing
+                               files to be served. Defaults to None.
+
+    Returns:
+        response: An HTTP response object containing
+        the appropriate status code, headers, and body.
+    """
+    method, path, _ = request[0].split(" ")
+
+    if method == "GET" and path == "/":
+        res = response(
+            status=HTTP_STATUS_OK + "\r\n",
+            headers={},
+            body=""
+        )
+
+    elif method == "GET" and path.startswith('/echo'):
         content = path.split("/echo/")[1]
-        response = (HTTP_STATUS_OK +
-                    "Content-Type: text/plain\r\n"
-                    f"Content-Length: {len(content)}\r\n"
-                    "\r\n"
-                    f"{content}\r\n")
-    elif path.startswith('/user-agent'):
+        res = response(
+            status=HTTP_STATUS_OK,
+            headers={"Content-Type": "text/plain",
+                     "Content-Length": len(content)},
+            body=content
+        )
+
+    elif method == "GET" and path.startswith('/user-agent'):
         content = request[2].split(": ")[1]
-        response = (HTTP_STATUS_OK +
-                    "Content-Type: text/plain\r\n"
-                    f"Content-Length: {len(content)}\r\n"
-                    "\r\n"
-                    f"{content}\r\n")
+        res = response(
+            status=HTTP_STATUS_OK,
+            headers={"Content-Type": "text/plain",
+                     "Content-Length": len(content)},
+            body=content
+        )
+
     elif path.startswith('/files'):
         file_name = path.split("/files/")[1]
-        file_content = handle_files(file_name)
+        if method == "POST":
+            content = request[-1]
+            handle_files(
+                file_name=file_name,
+                file_content=content, mode="write")
 
-        if file_content:
-            response = (HTTP_STATUS_OK +
-                        "Content-Type: application/octet-stream\r\n"
-                        f"Content-Length: {len(file_content)}\r\n"
-                        "\r\n"
-                        f"{file_content}\r\n")
+            res = response(
+                status=HTTP_STATUS_CREATED,
+                headers={"Content-Type": "text/plain",
+                         "Content-Length": len(content)},
+                body=content
+            )
         else:
-            response = HTTP_STATUS_NOT_FOUND + "\r\n"
+            file_content = handle_files(
+                file_name=file_name, mode="read")
+            if file_content:
+                res = response(
+                    status=HTTP_STATUS_OK,
+                    headers={"Content-Type": "application/octet-stream",
+                             "Content-Length": len(file_content)},
+                    body=file_content
+                )
+            else:
+                res = response(
+                    status=HTTP_STATUS_NOT_FOUND + "\r\n",
+                    headers={},
+                    body=""
+                )
 
     else:
-        response = HTTP_STATUS_NOT_FOUND + "\r\n"
+        res = response(
+            status=HTTP_STATUS_NOT_FOUND + "\r\n",
+            headers={},
+            body=""
+        )
 
-    return response
+    return res
 
 
-def handle_files(file_name):
-    try:
-        with open(f"{FILES_DIR}{file_name}", "r") as f:
-            file = f.read()
-    except FileNotFoundError:
-        file = None
+def handle_files(file_name, file_content=None, mode="read"):
+    if mode == 'write':
+        with open(f"{FILES_DIR}{file_name}", "w", encoding='UTF8') as f:
+            file = f.write(file_content)
+
+    else:
+        try:
+            with open(f"{FILES_DIR}{file_name}", "r") as f:
+                file = f.read()
+        except FileNotFoundError:
+            file = None
+
     return file
 
 
 def handle_client(conn, addr):
-    request = conn.recv(4096)
-    request = request.decode().splitlines()
-    response = get_response(request)
+    """
+    Handle incoming client requests.
 
-    conn.send(response.encode())
+    Args:
+        conn (socket): The client socket connection.
+        addr (tuple): The client address.
+
+    Returns:
+        bytes: The response to send back to the client.
+    """
+    request = conn.recv(4096).decode(
+        ).splitlines()
+
+    conn.send(handle_request(request))
     conn.close()
 
 
